@@ -489,4 +489,25 @@ describe('failure path', () => {
       },
     );
   });
+
+  itAsync('retries with hash if 400 network error contains PersistedQueryNotFound message', (resolve, reject) => {
+    fetch.mockResponseOnce(errorResponse, { status: 400 });
+    fetch.mockResponseOnce(response);
+    const link = createPersistedQuery({ sha256, useGETForHashedQueries: true }).concat(
+      createHttpLink(),
+    );
+    execute(link, { query, variables }).subscribe(result => {
+      expect(result.data).toEqual(data);
+      const [, failure] = fetch.mock.calls[0];
+      expect(failure!.method).toBe('GET');
+      expect(failure!.body).not.toBeDefined();
+      const [, success] = fetch.mock.calls[1];
+      expect(success!.method).toBe('POST');
+      expect(JSON.parse(success!.body!.toString()).query).toBe(queryString);
+      expect(
+        JSON.parse(success!.body!.toString()).extensions.persistedQuery.sha256Hash,
+      ).toBe(hash);
+      resolve();
+    }, reject);
+  });
 });

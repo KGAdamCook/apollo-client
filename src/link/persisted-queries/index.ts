@@ -47,7 +47,7 @@ export namespace PersistedQueryLink {
 }
 
 const defaultOptions = {
-  disable: ({ graphQLErrors, operation }: ErrorResponse) => {
+  disable: ({ graphQLErrors, networkError, operation }: ErrorResponse) => {
     // if the server doesn't support persisted queries, don't try anymore
     if (
       graphQLErrors &&
@@ -64,7 +64,14 @@ const defaultOptions = {
     if (
       response &&
       response.status &&
-      (response.status === 400 || response.status === 500)
+      (response.status === 400 || response.status === 500) &&
+      // some graphql servers may respond with a 400 for a PersistedQueryNotFound error
+      !(networkError &&
+        // TODO: We really shouldn't cast to ANY here
+        (networkError as any).result?.errors.some(
+          ({ message }: { message: string }) =>
+            message === 'PersistedQueryNotFound',
+        ))
     ) {
       return true;
     }
@@ -179,6 +186,14 @@ export const createPersistedQueryLink = (
             (response &&
               response.errors &&
               response.errors.some(
+                ({ message }: { message: string }) =>
+                  message === 'PersistedQueryNotFound',
+              )) ||
+            // A 400 networkError does not populate response.errors...
+            // See issue #6222
+            (networkError &&
+              // TODO: We really shouldn't cast to ANY here
+              (networkError as any).result?.errors.some(
                 ({ message }: { message: string }) =>
                   message === 'PersistedQueryNotFound',
               )) ||
